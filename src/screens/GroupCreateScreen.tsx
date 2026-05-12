@@ -7,6 +7,7 @@ import { useContactStore } from '@/store/contactStore';
 import { useAuthStore } from '@/store/authStore';
 import { conversationService } from '@/services/conversationService';
 import { colors } from '@/constants/theme';
+import { AvatarThumb } from '@/components/AvatarThumb';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupCreate'>;
 
@@ -75,8 +76,13 @@ export const GroupCreateScreen = ({ navigation }: Props) => {
                 accessibilityLabel={`${active ? 'Remove' : 'Add'} ${item.name}`}
                 onPress={() => setSelected((prev) => ({ ...prev, [item.userId]: !prev[item.userId] }))}
               >
-                <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.meta}>{active ? 'Selected' : item.phone}</Text>
+                <View style={styles.rowLeft}>
+                  <AvatarThumb uri={item.avatarUrl} label={item.name} size={40} />
+                  <View style={styles.rowText}>
+                    <Text style={styles.name}>{item.name}</Text>
+                    <Text style={styles.meta}>{active ? 'Selected' : item.phone}</Text>
+                  </View>
+                </View>
               </Pressable>
             );
           }}
@@ -107,8 +113,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 8,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  rowText: { flex: 1, minWidth: 0 },
   rowActive: { borderWidth: 1, borderColor: colors.accent },
   name: { color: colors.text, fontWeight: '600' },
   meta: { color: colors.muted },

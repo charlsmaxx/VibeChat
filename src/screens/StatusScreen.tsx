@@ -94,8 +94,7 @@ export const StatusScreen = (_props: Props) => {
       const asset = await mediaService.pick();
       if (!asset) return;
       const ext = asset.type === 'video' ? 'mp4' : 'jpg';
-      const path = `status/${userId}/${Date.now()}.${ext}`;
-      const url = await mediaService.upload(asset.uri, path);
+      const url = await mediaService.uploadStatusMedia(asset.uri, userId, ext);
       const { error } = await statusService.create({
         userId,
         mediaType: asset.type === 'video' ? 'video' : 'image',

@@ -11,4 +11,5 @@ export type RootStackParamList = {
   Chat: { conversationId: string; title: string };
   Contacts: undefined;
   GroupCreate: undefined;
+  Profile: undefined;
 };

@@ -7,6 +7,7 @@ import { AuthScreen } from '@/screens/AuthScreen';
 import { ChatScreen } from '@/screens/ChatScreen';
 import { ContactsScreen } from '@/screens/ContactsScreen';
 import { GroupCreateScreen } from '@/screens/GroupCreateScreen';
+import { ProfileScreen } from '@/screens/ProfileScreen';
 import { useAuthStore } from '@/store/authStore';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -24,6 +25,7 @@ export const RootNavigator = () => {
             <Stack.Screen name="MainTabs" component={MainTabNavigator} options={{ headerShown: false }} />
             <Stack.Screen name="Chat" component={ChatScreen} options={({ route }) => ({ title: route.params.title })} />
             <Stack.Screen name="Contacts" component={ContactsScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
             <Stack.Screen name="GroupCreate" component={GroupCreateScreen} options={{ title: 'New Group' }} />
           </>
         )}

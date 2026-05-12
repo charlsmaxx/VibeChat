@@ -11,6 +11,7 @@ import { authService } from '@/services/authService';
 import { notificationService } from '@/services/notificationService';
 import { colors } from '@/constants/theme';
 import { hasRequiredEnv, missingEnvKeys } from '@/constants/env';
+import { useContactStore } from '@/store/contactStore';
 
 export const AppRoot = () => {
   const bootstrap = useAuthStore((s) => s.bootstrap);
@@ -31,6 +32,14 @@ export const AppRoot = () => {
       data.subscription.unsubscribe();
     };
   }, [bootstrap]);
+
+  useEffect(() => {
+    if (!userId) return;
+    useContactStore
+      .getState()
+      .sync()
+      .catch(() => {});
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;

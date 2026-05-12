@@ -1,5 +1,5 @@
--- Run after schema.sql. Adds WhatsApp-style Status updates (24h expiry).
--- Storage: reuse existing `chat-media` bucket with paths like `status/<userId>/<filename>`.
+-- Run in Supabase SQL Editor after schema.sql. Adds WhatsApp-style Status updates (24h expiry).
+-- Storage: run `storage_and_profiles_access.sql` then `status_media_bucket.sql` (status uploads use `status-media` bucket).
 
 create table if not exists public.status_updates (
   id uuid primary key default uuid_generate_v4(),

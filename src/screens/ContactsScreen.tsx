@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { contactService } from '@/services/contactService';
@@ -7,8 +7,8 @@ import { useContactStore } from '@/store/contactStore';
 import { colors } from '@/constants/theme';
 import { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
-import { supabase } from '@/services/supabase/client';
 import { conversationService } from '@/services/conversationService';
+import { AvatarThumb } from '@/components/AvatarThumb';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Contacts'>;
 
@@ -17,51 +17,36 @@ export const ContactsScreen = ({ navigation }: Props) => {
   const userId = useAuthStore((s) => s.session?.user.id);
 
   useEffect(() => {
-    sync();
+    sync({ force: true });
   }, [sync]);
 
   const renderAppUser = useCallback(
-    ({ item }: { item: { id: string; name: string; phone: string; userId: string; username: string } }) => (
+    ({ item }: { item: { id: string; name: string; phone: string; userId: string; username: string; avatarUrl: string | null } }) => (
       <Pressable
         style={styles.row}
         accessibilityRole="button"
         accessibilityLabel={`Chat with ${item.name}`}
         onPress={async () => {
           if (!userId) return;
-          const { data: existingParticipants } = await supabase
-            .from('conversation_participants')
-            .select('conversation_id, user_id, conversations(id, title, is_group)')
-            .in('user_id', [userId, item.userId]);
-
-          const candidateMap = new Map<string, string[]>();
-          (existingParticipants ?? []).forEach((row: any) => {
-            const conversation = row.conversations;
-            if (!conversation || conversation.is_group) return;
-            const id = row.conversation_id;
-            candidateMap.set(id, [...(candidateMap.get(id) ?? []), row.user_id]);
-          });
-
-          const matched = [...candidateMap.entries()].find(([, users]) => {
-            const unique = [...new Set(users)];
-            return unique.length === 2 && unique.includes(userId) && unique.includes(item.userId);
-          });
-
-          if (matched) {
-            const [conversationId] = matched;
+          try {
+            const { conversationId } = await conversationService.openOrCreateDirectConversation({
+              userId,
+              peerUserId: item.userId,
+              peerDisplayName: item.name,
+            });
             navigation.navigate('Chat', { conversationId, title: item.name });
-            return;
+          } catch (e) {
+            console.warn('Open chat failed', e);
           }
-
-          const created = await conversationService.createDirectConversation({
-            title: item.name,
-            creatorId: userId,
-            peerUserId: item.userId,
-          });
-          navigation.navigate('Chat', { conversationId: created.id, title: item.name });
         }}
       >
-        <Text style={styles.name}>{item.name}</Text>
-        <Text style={styles.meta}>{item.phone}</Text>
+        <View style={styles.rowLeft}>
+          <AvatarThumb uri={item.avatarUrl} label={item.name} size={44} />
+          <View style={styles.rowText}>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.meta}>{item.phone}</Text>
+          </View>
+        </View>
       </Pressable>
     ),
     [navigation, userId],
@@ -96,6 +81,7 @@ export const ContactsScreen = ({ navigation }: Props) => {
       <FlatList
         data={usersOnApp}
         keyExtractor={(item) => item.id}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => sync({ force: true })} tintColor={colors.accent} />}
         ListEmptyComponent={<Text style={styles.empty}>{loading ? 'Syncing contacts...' : 'No users found on app'}</Text>}
         renderItem={renderAppUser}
       />
@@ -117,8 +103,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 8,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  rowText: { flex: 1, minWidth: 0 },
   name: { color: colors.text, fontWeight: '600' },
   meta: { color: colors.muted },
   invite: { color: colors.accent, fontWeight: '700' },

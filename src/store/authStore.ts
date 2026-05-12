@@ -7,7 +7,12 @@ interface AuthState {
   loading: boolean;
   bootstrap: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, username: string) => Promise<{ needsEmailVerification: boolean }>;
+  signUp: (
+    email: string,
+    password: string,
+    username: string,
+    phone?: string,
+  ) => Promise<{ needsEmailVerification: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -37,8 +42,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
     set({ session: data.session });
   },
-  signUp: async (email, password, username) => {
-    const { data, error } = await authService.signUpWithEmail(email, password, username);
+  signUp: async (email, password, username, phone) => {
+    const { data, error } = await authService.signUpWithEmail(email, password, username, phone);
     if (error) throw error;
     set({ session: data.session });
     return { needsEmailVerification: !data.session };

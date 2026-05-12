@@ -3,6 +3,8 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, Tex
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
+import { formatSupabaseWriteError } from '@/utils/supabaseErrors';
+import { normalizeToE164 } from '@/utils/phone';
 
 export const AuthScreen = () => {
   const signIn = useAuthStore((s) => s.signIn);
@@ -11,6 +13,7 @@ export const AuthScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
 
   const onSubmit = async () => {
     try {
@@ -19,7 +22,19 @@ export const AuthScreen = () => {
           Alert.alert('Username required', 'Please enter a username to create your account.');
           return;
         }
-        const { needsEmailVerification } = await signUp(email.trim(), password, username.trim());
+        if (phone.trim()) {
+          const e164 = normalizeToE164(phone.trim());
+          if (!e164) {
+            Alert.alert('Invalid phone', 'Enter a valid number with country code, or leave phone empty for now.');
+            return;
+          }
+        }
+        const { needsEmailVerification } = await signUp(
+          email.trim(),
+          password,
+          username.trim(),
+          phone.trim() || undefined,
+        );
         if (needsEmailVerification) {
           Alert.alert('Verify your email', 'Registration succeeded. Check your inbox and verify your email before signing in.');
         }
@@ -27,7 +42,7 @@ export const AuthScreen = () => {
         await signIn(email.trim(), password);
       }
     } catch (error) {
-      Alert.alert('Authentication failed', (error as Error).message);
+      Alert.alert('Authentication failed', formatSupabaseWriteError(error));
     }
   };
 
@@ -37,14 +52,25 @@ export const AuthScreen = () => {
         <View style={styles.form}>
           <Text style={styles.title}>VibeChat</Text>
           {isSignUp ? (
-            <TextInput
-              placeholder="Username"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-              value={username}
-              onChangeText={setUsername}
-              accessibilityLabel="Username"
-            />
+            <>
+              <TextInput
+                placeholder="Username"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                value={username}
+                onChangeText={setUsername}
+                accessibilityLabel="Username"
+              />
+              <TextInput
+                placeholder="Phone (optional, for finding friends)"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+                accessibilityLabel="Phone number optional"
+              />
+            </>
           ) : null}
           <TextInput
             placeholder="Email"
