@@ -1,20 +1,29 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/constants/theme';
+import { avatarDisplayUri } from '@/utils/avatarUri';
 
 type Props = {
   uri?: string | null;
   label: string;
   size?: number;
+  /** Pass when the same storage path was replaced (e.g. profile photo). */
+  cacheRevision?: number;
 };
 
-export const AvatarThumb = ({ uri, label, size = 40 }: Props) => {
+export const AvatarThumb = ({ uri, label, size = 40, cacheRevision = 0 }: Props) => {
   const s = size;
   const letter = (label?.trim()?.slice(0, 1) || '?').toUpperCase();
-  if (uri) {
+  const displayUri = useMemo(
+    () => (uri ? avatarDisplayUri(uri, cacheRevision || Date.now()) : undefined),
+    [uri, cacheRevision],
+  );
+
+  if (displayUri) {
     return (
       <Image
-        source={{ uri }}
+        key={`${displayUri}-${cacheRevision}`}
+        source={{ uri: displayUri }}
         style={[styles.image, { width: s, height: s, borderRadius: s / 2 }]}
         accessibilityIgnoresInvertColors
       />

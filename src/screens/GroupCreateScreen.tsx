@@ -6,6 +6,7 @@ import { RootStackParamList } from '@/navigation/types';
 import { useContactStore } from '@/store/contactStore';
 import { useAuthStore } from '@/store/authStore';
 import { conversationService } from '@/services/conversationService';
+import { navigateToChat } from '@/navigation/navigationRef';
 import { colors } from '@/constants/theme';
 import { AvatarThumb } from '@/components/AvatarThumb';
 
@@ -41,7 +42,8 @@ export const GroupCreateScreen = ({ navigation }: Props) => {
         creatorId,
         memberUserIds: selectedIds,
       });
-      navigation.replace('Chat', { conversationId: conversation.id, title: conversation.title });
+      navigateToChat({ conversationId: conversation.id, title: groupName.trim() });
+      navigation.goBack();
     } catch (error) {
       Alert.alert('Group creation failed', (error as Error).message);
     } finally {

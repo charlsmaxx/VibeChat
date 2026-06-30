@@ -17,7 +17,9 @@ import { RootStackParamList } from '@/navigation/types';
 import { mediaService } from '@/services/mediaService';
 import { profileService } from '@/services/profileService';
 import { useAuthStore } from '@/store/authStore';
-import { formatSupabaseWriteError } from '@/utils/supabaseErrors';
+import { useProfileStore } from '@/store/profileStore';
+import { avatarDisplayUri } from '@/utils/avatarUri';
+import { formatSupabaseError, formatSupabaseWriteError } from '@/utils/supabaseErrors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -27,6 +29,9 @@ export const ProfileScreen = ({ navigation }: Props) => {
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [localPreviewUri, setLocalPreviewUri] = useState<string | null>(null);
+  const [avatarRevision, setAvatarRevision] = useState(0);
+  const setMyAvatar = useProfileStore((s) => s.setMyAvatar);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -42,17 +47,26 @@ export const ProfileScreen = ({ navigation }: Props) => {
         setPhone(data.phone_number ?? '');
         setBio(data.bio ?? '');
         setAvatarUrl(data.avatar_url);
+        setMyAvatar(data.avatar_url);
       }
     } catch (e) {
-      Alert.alert('Profile', (e as Error).message);
+      Alert.alert('Profile', formatSupabaseError(e));
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [setMyAvatar, userId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const leaveProfileScreen = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('MainTabs');
+  }, [navigation]);
 
   const onSave = async () => {
     if (!userId) return;
@@ -67,7 +81,7 @@ export const ProfileScreen = ({ navigation }: Props) => {
         phone_number: phone.trim() || null,
         bio: bio.trim() || null,
       });
-      Alert.alert('Saved', 'Your profile was updated.');
+      leaveProfileScreen();
     } catch (e) {
       Alert.alert('Could not save', formatSupabaseWriteError(e));
     } finally {
@@ -75,20 +89,62 @@ export const ProfileScreen = ({ navigation }: Props) => {
     }
   };
 
+  const applyNewAvatar = async (localUri: string) => {
+    const savedUrl = await profileService.uploadAndSaveAvatar(localUri);
+    setAvatarUrl(savedUrl);
+    setLocalPreviewUri(null);
+    setAvatarRevision((n) => n + 1);
+    setMyAvatar(savedUrl);
+  };
+
   const onChangePhoto = async () => {
-    if (!userId) return;
+    if (!userId) {
+      Alert.alert('Sign in required', 'Please sign in again to change your photo.');
+      return;
+    }
     try {
-      setUploading(true);
       const asset = await mediaService.pickImage();
       if (!asset) return;
-      const url = await profileService.uploadAvatar(userId, asset.uri, asset.mimeType ?? null);
-      await profileService.updateMyProfile(userId, { avatar_url: url });
-      setAvatarUrl(url);
+      setLocalPreviewUri(asset.uri);
+      setUploading(true);
+      await applyNewAvatar(asset.uri);
+      const { data: refreshed } = await profileService.getMyProfile(userId);
+      if (refreshed?.avatar_url) {
+        setAvatarUrl(refreshed.avatar_url);
+        setAvatarRevision((n) => n + 1);
+        setMyAvatar(refreshed.avatar_url);
+      }
     } catch (e) {
-      Alert.alert('Photo', (e as Error).message);
+      setLocalPreviewUri(null);
+      Alert.alert('Photo', formatSupabaseError(e));
     } finally {
       setUploading(false);
     }
+  };
+
+  const onRemovePhoto = () => {
+    if (!userId || !avatarUrl) return;
+    Alert.alert('Remove photo', 'Your profile picture will be removed.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setUploading(true);
+            await profileService.removeAvatar();
+            setAvatarUrl(null);
+            setLocalPreviewUri(null);
+            setAvatarRevision((n) => n + 1);
+            setMyAvatar(null);
+          } catch (e) {
+            Alert.alert('Photo', formatSupabaseError(e));
+          } finally {
+            setUploading(false);
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -106,9 +162,21 @@ export const ProfileScreen = ({ navigation }: Props) => {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Pressable style={styles.avatarWrap} onPress={onChangePhoto} disabled={uploading} accessibilityRole="button" accessibilityLabel="Change profile photo">
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+          <Pressable
+            style={styles.avatarWrap}
+            onPress={onChangePhoto}
+            disabled={uploading}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo"
+          >
+            {localPreviewUri || avatarUrl ? (
+              <Image
+                key={localPreviewUri ?? `remote-${avatarRevision}`}
+                source={{
+                  uri: localPreviewUri ?? avatarDisplayUri(avatarUrl, avatarRevision) ?? '',
+                }}
+                style={styles.avatarImg}
+              />
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarLetter}>{username.slice(0, 1).toUpperCase() || '?'}</Text>
@@ -117,6 +185,16 @@ export const ProfileScreen = ({ navigation }: Props) => {
             {uploading ? <ActivityIndicator style={styles.avatarSpinner} color={colors.accent} /> : null}
             <Text style={styles.changePhoto}>{uploading ? 'Uploading…' : 'Change photo'}</Text>
           </Pressable>
+          {avatarUrl ? (
+            <Pressable
+              onPress={onRemovePhoto}
+              disabled={uploading}
+              accessibilityRole="button"
+              accessibilityLabel="Remove profile photo"
+            >
+              <Text style={styles.removePhoto}>Remove photo</Text>
+            </Pressable>
+          ) : null}
 
           <Text style={styles.label}>Username</Text>
           <TextInput
@@ -151,7 +229,13 @@ export const ProfileScreen = ({ navigation }: Props) => {
             accessibilityLabel="Bio"
           />
 
-          <Pressable style={[styles.button, saving && styles.buttonDisabled]} onPress={onSave} disabled={saving} accessibilityRole="button" accessibilityLabel="Save profile">
+          <Pressable
+            style={[styles.button, saving && styles.buttonDisabled]}
+            onPress={onSave}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Save profile"
+          >
             <Text style={styles.buttonText}>{saving ? 'Saving…' : 'Save'}</Text>
           </Pressable>
         </ScrollView>
@@ -177,7 +261,7 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 56 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20, paddingBottom: 40, gap: 8 },
-  avatarWrap: { alignItems: 'center', marginBottom: 16 },
+  avatarWrap: { alignItems: 'center', marginBottom: 4 },
   avatarImg: { width: 112, height: 112, borderRadius: 56, backgroundColor: '#2B4279' },
   avatarPlaceholder: {
     width: 112,
@@ -190,6 +274,7 @@ const styles = StyleSheet.create({
   avatarLetter: { color: colors.text, fontSize: 40, fontWeight: '700' },
   avatarSpinner: { marginTop: 8 },
   changePhoto: { color: colors.accent, marginTop: 8, fontWeight: '600' },
+  removePhoto: { color: colors.muted, textAlign: 'center', marginBottom: 12, fontWeight: '600' },
   label: { color: colors.muted, fontSize: 13, marginTop: 8 },
   input: {
     backgroundColor: '#FFFFFF',

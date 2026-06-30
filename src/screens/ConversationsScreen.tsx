@@ -1,22 +1,28 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
+import type { ChatsStackParamList, MainTabParamList, RootStackParamList } from '@/navigation/types';
 import { colors } from '@/constants/theme';
 import { supabase } from '@/services/supabase/client';
 import { Conversation } from '@/types';
 import { useAuthStore } from '@/store/authStore';
 import { useContactStore } from '@/store/contactStore';
+import { navigateToChatInStack } from '@/navigation/navigationRef';
+import { useOpenDirectChat } from '@/hooks/useOpenDirectChat';
 import { conversationService } from '@/services/conversationService';
 import { AvatarThumb } from '@/components/AvatarThumb';
+import { formatSupabaseError } from '@/utils/supabaseErrors';
 
 type Props = CompositeScreenProps<
-  BottomTabScreenProps<MainTabParamList, 'Chats'>,
-  NativeStackScreenProps<RootStackParamList>
+  NativeStackScreenProps<ChatsStackParamList, 'Conversations'>,
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList>,
+    NativeStackScreenProps<RootStackParamList>
+  >
 >;
 
 export const ConversationsScreen = ({ navigation }: Props) => {
@@ -31,12 +37,7 @@ export const ConversationsScreen = ({ navigation }: Props) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      syncContacts();
-    }, [syncContacts]),
-  );
+  const { openingPeerId, openDirectChat } = useOpenDirectChat(session?.user.id, navigation);
 
   const loadConversations = useCallback(
     async (options?: { showLoading?: boolean }) => {
@@ -58,10 +59,10 @@ export const ConversationsScreen = ({ navigation }: Props) => {
           })
           .filter(Boolean) as Conversation[];
         const directs = all.filter((c) => !c.is_group);
-        setItems(directs);
 
         const conversationIds = directs.map((c) => c.id).filter(Boolean);
         if (!conversationIds.length) {
+          setItems([]);
           setUnreadByConversation({});
           setDirectTitleByConversation({});
           setPeerUserIdByConversation({});
@@ -112,7 +113,7 @@ export const ConversationsScreen = ({ navigation }: Props) => {
           const conversation = Array.isArray(row.conversations) ? row.conversations[0] : row.conversations;
           if (!conversation || conversation.is_group) return;
           const peerId = (participantMap.get(conversation.id) ?? []).find((id) => id !== uid);
-          if (peerId) {
+          if (peerId && peerId !== uid) {
             peerMap[conversation.id] = peerId;
             titleMap[conversation.id] = profileMap.get(peerId) ?? conversation.title;
             peerAvMap[conversation.id] = avatarMap.get(peerId) ?? null;
@@ -121,6 +122,7 @@ export const ConversationsScreen = ({ navigation }: Props) => {
         setDirectTitleByConversation(titleMap);
         setPeerUserIdByConversation(peerMap);
         setPeerAvatarByConversation(peerAvMap);
+        setItems(directs.filter((c) => Boolean(peerMap[c.id])));
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -128,6 +130,15 @@ export const ConversationsScreen = ({ navigation }: Props) => {
       }
     },
     [session?.user.id],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (session?.user.id) {
+        syncContacts(session.user.id);
+        loadConversations({ showLoading: false });
+      }
+    }, [loadConversations, session?.user.id, syncContacts]),
   );
 
   useEffect(() => {
@@ -150,30 +161,36 @@ export const ConversationsScreen = ({ navigation }: Props) => {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await syncContacts({ force: true });
+      if (session?.user.id) await syncContacts(session.user.id, { force: true });
       await loadConversations({ showLoading: false });
     } finally {
       setRefreshing(false);
     }
-  }, [loadConversations, syncContacts]);
+  }, [loadConversations, session?.user.id, syncContacts]);
 
   const peerIdsInChats = new Set(Object.values(peerUserIdByConversation));
   const suggestions = usersOnApp.filter(
     (u) => session?.user.id && u.userId !== session.user.id && !peerIdsInChats.has(u.userId),
   );
 
-  const openSuggestion = async (userId: string, peerUserId: string, title: string) => {
-    try {
-      const { conversationId } = await conversationService.openOrCreateDirectConversation({
-        userId,
-        peerUserId,
-        peerDisplayName: title,
-      });
-      navigation.navigate('Chat', { conversationId, title });
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
+  const openSuggestion = useCallback(
+    async (peerUserId: string, title: string) => {
+      setError(null);
+      await openDirectChat(peerUserId, title);
+    },
+    [openDirectChat],
+  );
+
+  const openExistingChat = useCallback(
+    (conversationId: string, title: string) => {
+      try {
+        navigateToChatInStack(navigation, { conversationId, title });
+      } catch (err) {
+        Alert.alert('Could not open chat', (err as Error).message);
+      }
+    },
+    [navigation],
+  );
 
   const listHeader =
     suggestions.length === 0 ? null : (
@@ -186,13 +203,20 @@ export const ConversationsScreen = ({ navigation }: Props) => {
             style={styles.suggestRow}
             accessibilityRole="button"
             accessibilityLabel={`Start chat with ${u.name}`}
-            onPress={() => session?.user.id && openSuggestion(session.user.id, u.userId, u.name)}
+            onPress={() => {
+              if (!session?.user.id) {
+                Alert.alert('Sign in required', 'Please sign in again to start a chat.');
+                return;
+              }
+              void openSuggestion(u.userId, u.name);
+            }}
+            disabled={openingPeerId === u.userId}
           >
             <View style={styles.suggestIdentity}>
               <AvatarThumb uri={u.avatarUrl} label={u.name} size={40} />
               <Text style={styles.suggestName}>{u.name}</Text>
             </View>
-            <Text style={styles.suggestAction}>Chat</Text>
+            <Text style={styles.suggestAction}>{openingPeerId === u.userId ? '…' : 'Chat'}</Text>
           </Pressable>
         ))}
       </View>
@@ -239,7 +263,7 @@ export const ConversationsScreen = ({ navigation }: Props) => {
               style={styles.row}
               accessibilityRole="button"
               accessibilityLabel={`Open chat with ${title}`}
-              onPress={() => navigation.navigate('Chat', { conversationId: item.id, title })}
+              onPress={() => openExistingChat(item.id, title)}
             >
               <View style={styles.rowTop}>
                 <View style={styles.identityWrap}>
@@ -259,6 +283,12 @@ export const ConversationsScreen = ({ navigation }: Props) => {
           );
         }}
       />
+      {openingPeerId ? (
+        <View style={styles.openingOverlay} pointerEvents="auto">
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={styles.openingText}>Opening chat…</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -316,4 +346,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   unreadText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12 },
+  openingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    zIndex: 20,
+    elevation: 20,
+  },
+  openingText: { color: colors.text, fontWeight: '600' },
 });

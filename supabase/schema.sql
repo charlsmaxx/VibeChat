@@ -67,16 +67,44 @@ alter table public.messages enable row level security;
 alter table public.push_tokens enable row level security;
 alter table public.calls enable row level security;
 
+-- RLS helper: avoids infinite recursion when policies query conversation_participants.
+create or replace function public.user_is_conversation_member(p_conversation_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.conversation_participants
+    where conversation_id = p_conversation_id
+      and user_id = auth.uid()
+  );
+$$;
+
+revoke all on function public.user_is_conversation_member(uuid) from public;
+grant execute on function public.user_is_conversation_member(uuid) to authenticated;
+
 -- Policies: drop first so this file can be re-run safely after partial applies.
 drop policy if exists "profiles_self" on public.profiles;
-create policy "profiles_self" on public.profiles for all using (auth.uid() = id) with check (auth.uid() = id);
+
+drop policy if exists "profiles_select_authenticated" on public.profiles;
+create policy "profiles_select_authenticated"
+  on public.profiles for select to authenticated using (true);
+
+drop policy if exists "profiles_insert_own" on public.profiles;
+create policy "profiles_insert_own"
+  on public.profiles for insert to authenticated with check (auth.uid() = id);
+
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own"
+  on public.profiles for update to authenticated
+  using (auth.uid() = id) with check (auth.uid() = id);
 
 drop policy if exists "conversations_members_only" on public.conversations;
-create policy "conversations_members_only" on public.conversations for select using (
-  exists (
-    select 1 from public.conversation_participants cp
-    where cp.conversation_id = conversations.id and cp.user_id = auth.uid()
-  )
+create policy "conversations_members_only" on public.conversations for select to authenticated using (
+  public.user_is_conversation_member(id) or created_by = auth.uid()
 );
 
 drop policy if exists "conversations_insert_owner" on public.conversations;
@@ -92,7 +120,11 @@ create policy "conversations_update_owner" on public.conversations for update us
 );
 
 drop policy if exists "participants_self" on public.conversation_participants;
-create policy "participants_self" on public.conversation_participants for select using (user_id = auth.uid());
+drop policy if exists "participants_select_member" on public.conversation_participants;
+create policy "participants_select_member"
+  on public.conversation_participants for select
+  to authenticated
+  using (public.user_is_conversation_member(conversation_id));
 drop policy if exists "participants_insert_by_owner" on public.conversation_participants;
 create policy "participants_insert_by_owner" on public.conversation_participants for insert with check (
   user_id = auth.uid()
@@ -104,20 +136,26 @@ create policy "participants_insert_by_owner" on public.conversation_participants
 );
 
 drop policy if exists "messages_participants_read" on public.messages;
-create policy "messages_participants_read" on public.messages for select using (
-  sender_id = auth.uid() or receiver_id = auth.uid() or exists (
-    select 1 from public.conversation_participants cp
-    where cp.conversation_id = messages.conversation_id and cp.user_id = auth.uid()
-  )
+create policy "messages_participants_read" on public.messages for select to authenticated using (
+  public.user_is_conversation_member(conversation_id)
 );
 
 drop policy if exists "messages_sender_insert" on public.messages;
-create policy "messages_sender_insert" on public.messages for insert with check (sender_id = auth.uid());
+create policy "messages_sender_insert" on public.messages for insert to authenticated with check (
+  sender_id = auth.uid() and public.user_is_conversation_member(conversation_id)
+);
 drop policy if exists "messages_participant_update" on public.messages;
-create policy "messages_participant_update" on public.messages for update using (
-  sender_id = auth.uid() or receiver_id = auth.uid()
+create policy "messages_participant_update" on public.messages for update to authenticated using (
+  public.user_is_conversation_member(conversation_id)
 ) with check (
-  sender_id = auth.uid() or receiver_id = auth.uid()
+  public.user_is_conversation_member(conversation_id)
+);
+
+drop policy if exists "conversations_update_member" on public.conversations;
+create policy "conversations_update_member" on public.conversations for update to authenticated using (
+  public.user_is_conversation_member(id)
+) with check (
+  public.user_is_conversation_member(id)
 );
 drop policy if exists "push_tokens_self" on public.push_tokens;
 create policy "push_tokens_self" on public.push_tokens for all using (user_id = auth.uid()) with check (user_id = auth.uid());

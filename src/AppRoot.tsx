@@ -37,9 +37,14 @@ export const AppRoot = () => {
     if (!userId) return;
     useContactStore
       .getState()
-      .sync()
+      .sync(userId)
       .catch(() => {});
   }, [userId]);
+
+  useEffect(() => {
+    notificationService.setupCallPushHandlers();
+    notificationService.processColdStartCallNotification().catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -57,6 +62,11 @@ export const AppRoot = () => {
     };
 
     setPresence(true);
+    // Heartbeat keeps last_seen fresh so peers can detect when we go offline (stale presence).
+    const heartbeat = setInterval(() => {
+      if (AppState.currentState === 'active') setPresence(true);
+    }, 30_000);
+
     const appStateSub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') setPresence(true);
       else setPresence(false);
@@ -71,6 +81,7 @@ export const AppRoot = () => {
     flushOutbox(userId);
 
     return () => {
+      clearInterval(heartbeat);
       appStateSub.remove();
       netSub();
       setPresence(false);

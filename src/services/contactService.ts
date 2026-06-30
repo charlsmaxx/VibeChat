@@ -6,7 +6,7 @@ import { normalizePhoneNumbers } from '@/utils/phone';
 const PROFILE_CHUNK = 100;
 
 export const contactService = {
-  async syncContacts() {
+  async syncContacts(currentUserId?: string) {
     const permission = await Contacts.requestPermissionsAsync();
     if (permission.status !== 'granted') return { usersOnApp: [], inviteContacts: [] };
 
@@ -63,6 +63,7 @@ export const contactService = {
       avatarUrl: string | null;
     }> = [];
     const inviteContacts: Array<{ id: string; name: string; phone: string }> = [];
+    const seenUserIds = new Set<string>();
 
     rows.forEach((contact) => {
       const appPhone = contact.phones.find((phone) => userByPhone.has(phone));
@@ -70,7 +71,8 @@ export const contactService = {
         const profile = userByPhone.get(appPhone) as
           | { id: string; username?: string | null; avatar_url?: string | null }
           | undefined;
-        if (profile) {
+        if (profile && profile.id !== currentUserId && !seenUserIds.has(profile.id)) {
+          seenUserIds.add(profile.id);
           usersOnApp.push({
             id: contact.id,
             name: contact.name,

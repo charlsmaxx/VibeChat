@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors } from '@/constants/theme';
 import { MainTabParamList } from '@/navigation/types';
-import { ConversationsScreen } from '@/screens/ConversationsScreen';
+import { ChatsStackNavigator } from '@/navigation/ChatsStackNavigator';
 import { StatusScreen } from '@/screens/StatusScreen';
 import { CommunitiesScreen } from '@/screens/CommunitiesScreen';
 import { CallsScreen } from '@/screens/CallsScreen';
@@ -29,7 +29,7 @@ export const MainTabNavigator = () => {
         },
       })}
     >
-      <Tab.Screen name="Chats" component={ConversationsScreen} options={{ title: 'Chats' }} />
+      <Tab.Screen name="Chats" component={ChatsStackNavigator} options={{ title: 'Chats' }} />
       <Tab.Screen name="Status" component={StatusScreen} options={{ title: 'Updates' }} />
       <Tab.Screen name="Communities" component={CommunitiesScreen} options={{ title: 'Communities' }} />
       <Tab.Screen name="Calls" component={CallsScreen} options={{ title: 'Calls' }} />

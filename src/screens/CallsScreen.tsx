@@ -30,13 +30,17 @@ export const CallsScreen = (_props: Props) => {
       setError(null);
       const { data, error: qErr } = await supabase
         .from('calls')
-        .select('id, caller_id, callee_id, channel, status, created_at')
+        .select('id, caller_id, callee_id, channel, status, created_at, is_group, call_type')
         .or(`caller_id.eq.${userId},callee_id.eq.${userId}`)
         .order('created_at', { ascending: false })
         .limit(80);
       if (qErr) throw qErr;
       const list = (data ?? []) as CallLogRow[];
-      const peerIds = [...new Set(list.flatMap((c) => [c.caller_id, c.callee_id]))];
+      const peerIds = [
+        ...new Set(
+          list.flatMap((c) => [c.caller_id, c.callee_id].filter((id): id is string => typeof id === 'string' && id.length > 0)),
+        ),
+      ];
       let map = new Map<string, string>();
       if (peerIds.length) {
         const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', peerIds);
@@ -45,7 +49,7 @@ export const CallsScreen = (_props: Props) => {
       const enriched: EnrichedCall[] = list.map((c) => {
         const isOutgoing = c.caller_id === userId;
         const peerId = isOutgoing ? c.callee_id : c.caller_id;
-        const peerName = map.get(peerId) ?? 'Unknown';
+        const peerName = c.is_group ? 'Group call' : map.get(peerId ?? '') ?? 'Unknown';
         const directionLabel = isOutgoing ? 'Outgoing' : 'Incoming';
         const missed = !isOutgoing && (c.status === 'missed' || c.status === 'ringing' || c.status === 'declined');
         const summaryLabel = missed ? 'Missed' : c.status;

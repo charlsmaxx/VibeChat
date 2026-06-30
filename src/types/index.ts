@@ -59,8 +59,11 @@ export interface StatusUpdate {
 export interface CallLogRow {
   id: string;
   caller_id: string;
-  callee_id: string;
+  callee_id: string | null;
   channel: string;
   status: string;
   created_at: string;
+  conversation_id?: string | null;
+  call_type?: 'audio' | 'video';
+  is_group?: boolean;
 }

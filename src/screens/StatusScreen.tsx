@@ -21,6 +21,7 @@ import { statusService } from '@/services/statusService';
 import { mediaService } from '@/services/mediaService';
 import type { StatusUpdate } from '@/types';
 import { supabase } from '@/services/supabase/client';
+import { formatSupabaseError } from '@/utils/supabaseErrors';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Status'>,
@@ -82,7 +83,7 @@ export const StatusScreen = (_props: Props) => {
       setTextModal(false);
       await load();
     } catch (e) {
-      Alert.alert('Could not post status', (e as Error).message);
+      Alert.alert('Could not post status', formatSupabaseError(e));
     } finally {
       setPosting(false);
     }
@@ -104,7 +105,7 @@ export const StatusScreen = (_props: Props) => {
       if (error) throw error;
       await load();
     } catch (e) {
-      Alert.alert('Could not post media status', (e as Error).message);
+      Alert.alert('Could not post media status', formatSupabaseError(e));
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,6 +8,7 @@ import { colors } from '@/constants/theme';
 import type { MainTabParamList, RootStackParamList } from '@/navigation/types';
 import { supabase } from '@/services/supabase/client';
 import type { Conversation } from '@/types';
+import { navigateToChat } from '@/navigation/navigationRef';
 import { useAuthStore } from '@/store/authStore';
 
 type Props = CompositeScreenProps<
@@ -80,7 +81,13 @@ export const CommunitiesScreen = ({ navigation }: Props) => {
             style={styles.row}
             accessibilityRole="button"
             accessibilityLabel={`Open group ${item.title}`}
-            onPress={() => navigation.navigate('Chat', { conversationId: item.id, title: item.title })}
+            onPress={() => {
+              try {
+                navigateToChat({ conversationId: item.id, title: item.title });
+              } catch (err) {
+                Alert.alert('Could not open chat', (err as Error).message);
+              }
+            }}
           >
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{item.title.slice(0, 1).toUpperCase()}</Text>

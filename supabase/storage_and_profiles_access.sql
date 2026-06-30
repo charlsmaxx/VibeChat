@@ -1,5 +1,5 @@
 -- Run in Supabase SQL Editor after schema.sql and whatsapp_features.sql.
--- Also run `status_media_bucket.sql` for the dedicated status uploads bucket (recommended).
+-- Also run: status_media_bucket.sql, fix_chat_rls_and_avatars.sql (chat + profile photos).
 -- Fixes: (1) storage buckets + upload policies, (2) profiles readable to authenticated users for contact discovery.
 
 -- ─── Storage buckets ─────────────────────────────────────────────────────────
@@ -22,6 +22,10 @@ create policy "chat_media_insert_own_paths"
     bucket_id = 'chat-media'
     and (
       (
+        split_part(name, '/', 1) = 'avatar'
+        and split_part(name, '/', 2) = (auth.uid())::text
+      )
+      or (
         split_part(name, '/', 1) = 'status'
         and split_part(name, '/', 2) = (auth.uid())::text
       )
@@ -42,6 +46,10 @@ create policy "chat_media_update_own_paths"
     bucket_id = 'chat-media'
     and (
       (
+        split_part(name, '/', 1) = 'avatar'
+        and split_part(name, '/', 2) = (auth.uid())::text
+      )
+      or (
         split_part(name, '/', 1) = 'status'
         and split_part(name, '/', 2) = (auth.uid())::text
       )
@@ -57,6 +65,10 @@ create policy "chat_media_update_own_paths"
     bucket_id = 'chat-media'
     and (
       (
+        split_part(name, '/', 1) = 'avatar'
+        and split_part(name, '/', 2) = (auth.uid())::text
+      )
+      or (
         split_part(name, '/', 1) = 'status'
         and split_part(name, '/', 2) = (auth.uid())::text
       )
@@ -77,6 +89,10 @@ create policy "chat_media_delete_own_paths"
     bucket_id = 'chat-media'
     and (
       (
+        split_part(name, '/', 1) = 'avatar'
+        and split_part(name, '/', 2) = (auth.uid())::text
+      )
+      or (
         split_part(name, '/', 1) = 'status'
         and split_part(name, '/', 2) = (auth.uid())::text
       )

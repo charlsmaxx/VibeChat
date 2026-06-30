@@ -32,7 +32,13 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "color": "#0D1B3D",
+          "defaultChannel": "messages"
+        }
+      ],
       "expo-contacts",
       "expo-image-picker",
       "expo-av"

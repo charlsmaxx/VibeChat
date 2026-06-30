@@ -1,0 +1,9 @@
+# Supabase local config (Edge Functions)
+# Deploy: supabase functions deploy agora-token
+#          supabase functions deploy notify-incoming-call
+
+[functions.agora-token]
+verify_jwt = true
+
+[functions.notify-incoming-call]
+verify_jwt = false

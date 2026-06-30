@@ -42,13 +42,14 @@ export const authService = {
   },
   async signUpWithEmail(email: string, password: string, username: string, phone?: string) {
     const trimmedPhone = phone?.trim();
+    const phoneE164 = trimmedPhone ? normalizeToE164(trimmedPhone) : null;
     const response = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           username: username.trim(),
-          ...(trimmedPhone ? { phone: trimmedPhone } : {}),
+          ...(phoneE164 ? { phone: phoneE164 } : {}),
         },
       },
     });

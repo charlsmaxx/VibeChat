@@ -29,6 +29,10 @@ module.exports = ({ config }) => {
         ...new Set([
           ...(config.android?.permissions ?? []),
           'android.permission.CAMERA',
+          'android.permission.RECORD_AUDIO',
+          'android.permission.MODIFY_AUDIO_SETTINGS',
+          'android.permission.BLUETOOTH_CONNECT',
+          'android.permission.POST_NOTIFICATIONS',
           'android.permission.INTERNET',
           'android.permission.ACCESS_NETWORK_STATE',
         ]),

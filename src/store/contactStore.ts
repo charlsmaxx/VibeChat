@@ -17,7 +17,7 @@ interface ContactState {
   inviteContacts: Array<{ id: string; name: string; phone: string }>;
   loading: boolean;
   lastSyncedAt: number;
-  sync: (opts?: { force?: boolean }) => Promise<void>;
+  sync: (currentUserId?: string, opts?: { force?: boolean }) => Promise<void>;
 }
 
 export const useContactStore = create<ContactState>((set, get) => ({
@@ -25,14 +25,14 @@ export const useContactStore = create<ContactState>((set, get) => ({
   inviteContacts: [],
   loading: false,
   lastSyncedAt: 0,
-  sync: async (opts) => {
+  sync: async (currentUserId, opts) => {
     const force = opts?.force === true;
     const { lastSyncedAt, loading } = get();
     if (!force && lastSyncedAt > 0 && Date.now() - lastSyncedAt < THROTTLE_MS) return;
     if (loading && !force) return;
     set({ loading: true });
     try {
-      const result = await contactService.syncContacts();
+      const result = await contactService.syncContacts(currentUserId);
       set({
         usersOnApp: result.usersOnApp,
         inviteContacts: result.inviteContacts,

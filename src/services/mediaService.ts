@@ -16,6 +16,21 @@ function contentTypeForPath(filePath: string): string {
   return 'application/octet-stream';
 }
 
+async function readUriAsArrayBuffer(uri: string): Promise<ArrayBuffer> {
+  try {
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return decode(base64);
+  } catch {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error('Could not read the selected image. Try another photo.');
+    }
+    return response.arrayBuffer();
+  }
+}
+
 export const mediaService = {
   async pick() {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -27,11 +42,16 @@ export const mediaService = {
   },
 
   async pickImage() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      throw new Error('Photo library permission is required to choose a profile picture.');
+    }
+
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.85,
-      allowsEditing: Platform.OS === 'ios',
-      aspect: Platform.OS === 'ios' ? [1, 1] : undefined,
+      allowsEditing: true,
+      aspect: [1, 1],
     });
     if (res.canceled) return null;
     return res.assets[0];
@@ -44,9 +64,9 @@ export const mediaService = {
     contentType?: string,
     options?: { upsert?: boolean },
   ) {
-    const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    const body = await readUriAsArrayBuffer(uri);
     const ct = contentType ?? contentTypeForPath(filePath);
-    const { error } = await supabase.storage.from(bucket).upload(filePath, decode(base64), {
+    const { error } = await supabase.storage.from(bucket).upload(filePath, body, {
       contentType: ct,
       upsert: options?.upsert ?? true,
     });
